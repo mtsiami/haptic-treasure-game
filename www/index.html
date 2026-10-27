@@ -35,20 +35,25 @@
 
   <div id="game">
     <div id="coords">x: 0, y: 0</div>
+    <div id="target" style="position:absolute; width:20px; height:20px; background:red; border-radius:50%;"></div>
   </div>
 
   <script>
-    const coordsEl = document.getElementById("coords");
+    const targetX = Math.random() * window.innerWidth;
+    const targetY = Math.random() * window.innerHeight;
+    const targetEl = document.getElementById("target");
+    targetEl.style.left = targetX + "px";
+    targetEl.style.top = targetY + "px";
     document.getElementById("game").addEventListener("touchstart", (e) => {
-    const x = Math.round(e.touches[0].clientX);
-    const y = Math.round(e.touches[0].clientY);
-    coordsEl.textContent = "x: " + x + ", y: " + y;
+        const x = Math.round(e.touches[0].clientX);
+        const y = Math.round(e.touches[0].clientY);
+        coordsEl.textContent = "x: " + x + ", y: " + y;
+    });
     document.getElementById("game").addEventListener("touchmove", (e) => {
-    const x = Math.round(e.touches[0].clientX);
-    const y = Math.round(e.touches[0].clientY);
-    coordsEl.textContent = "x: " + x + ", y: " + y;
-});
-});
+        const x = Math.round(e.touches[0].clientX);
+        const y = Math.round(e.touches[0].clientY);
+        coordsEl.textContent = "x: " + x + ", y: " + y;
+    });
   </script>
 
 </body>
