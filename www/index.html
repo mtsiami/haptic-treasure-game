@@ -13,6 +13,7 @@
   <h2>Τεστ δόνησης</h2>
   <p id="support"></p>
   <button id="btn1">Μία δόνηση (300ms)</button>
+  <button id="btn2">Native δόνηση (300ms)</button>
 
   <script>
     const support = document.getElementById("support");
@@ -23,6 +24,10 @@
     document.getElementById("btn1").addEventListener("click", () => {
       const ok = navigator.vibrate(300);
       console.log("vibrate returned:", ok);
+    });
+
+    document.getElementById("btn2").addEventListener("click", async () => {
+      await Capacitor.Plugins.Haptics.vibrate({ duration: 300 });
     });
   </script>
 </body>
