@@ -29,41 +29,109 @@
       font-family: sans-serif;
       z-index: 10;
     }
+
+    #message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #0f0;
+      font-size: 2.5rem;
+      font-family: sans-serif;
+      z-index: 10;
+      display: none;
+    }
+
+    #target {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      background: red;
+      border-radius: 50%;
+    }
   </style>
 </head>
 <body>
 
   <div id="game">
     <div id="coords">x: 0, y: 0</div>
-    <div id="target" style="position:absolute; width:20px; height:20px; background:red; border-radius:50%;"></div>
+    <div id="message">🎉 Βρέθηκε!</div>
+    <div id="target"></div>
   </div>
 
   <script>
     const coordsEl = document.getElementById("coords");
-
-    const targetX = Math.random() * window.innerWidth;
-    const targetY = Math.random() * window.innerHeight;
+    const messageEl = document.getElementById("message");
     const targetEl = document.getElementById("target");
-    targetEl.style.left = targetX + "px";
-    targetEl.style.top = targetY + "px";
 
-    document.getElementById("game").addEventListener("touchstart", (e) => {
-        const x = Math.round(e.touches[0].clientX);
-        const y = Math.round(e.touches[0].clientY);
-        const dx = x - targetX;   // βρίσκει την διαφορά στο x
-        const dy = y - targetY;   // βρίσκει την διαφορά στο y
-        const distance = Math.round(Math.hypot(dx, dy));   // υπολογίζει την ευθεία απόσταση (Πυθαγόρειο)
-        coordsEl.textContent = "x: " + x + ", y: " + y + ", distance: " + distance;
-    });
+    let currentDistance = Infinity;
+    let targetX, targetY;
 
-    document.getElementById("game").addEventListener("touchmove", (e) => {
-        const x = Math.round(e.touches[0].clientX);
-        const y = Math.round(e.touches[0].clientY);
-        const dx = x - targetX;
-        const dy = y - targetY;
-        const distance = Math.round(Math.hypot(dx, dy));
-        coordsEl.textContent = "x: " + x + ", y: " + y + ", distance: " + distance;
-    });
+    const FOUND_THRESHOLD = 40; // πόσο κοντά σημαίνει "βρέθηκε"
+
+    // Τοποθετεί τον θησαυρό σε τυχαία θέση
+    function spawnTarget() {
+      targetX = Math.random() * window.innerWidth;
+      targetY = Math.random() * window.innerHeight;
+      targetEl.style.left = targetX + "px";
+      targetEl.style.top = targetY + "px";
+      messageEl.style.display = "none";
+    }
+
+    // Δονεί το κινητό, native μέσω Capacitor αν υπάρχει, αλλιώς με το browser API
+    async function doVibrate(duration) {
+      try {
+        if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Haptics) {
+          await Capacitor.Plugins.Haptics.vibrate({ duration });
+        } else if ("vibrate" in navigator) {
+          navigator.vibrate(duration);
+        }
+      } catch (err) {
+        console.log("vibrate error:", err);
+      }
+    }
+
+    // Αποφασίζει πόση παύση αντιστοιχεί στην τρέχουσα απόσταση
+    function getPause(distance) {
+      if (distance > 400) return 400;
+      if (distance > 250) return 300;
+      if (distance > 150) return 200;
+      if (distance > 80) return 100;
+      return 50;
+    }
+
+    // Ο βρόχος δόνησης: δονεί, περιμένει, ξαναδονεί, ανάλογα με τη ζώνη
+    async function vibrationLoop() {
+      if (currentDistance <= FOUND_THRESHOLD) {
+        await doVibrate(500);
+        messageEl.style.display = "block";
+        setTimeout(() => {
+          spawnTarget();
+          currentDistance = Infinity;
+        }, 1200);
+        setTimeout(vibrationLoop, 1500);
+        return;
+      }
+
+      await doVibrate(50);
+      const pause = getPause(currentDistance);
+      setTimeout(vibrationLoop, pause);
+    }
+
+    function updatePosition(e) {
+      const x = Math.round(e.touches[0].clientX);
+      const y = Math.round(e.touches[0].clientY);
+      const dx = x - targetX;
+      const dy = y - targetY;
+      currentDistance = Math.round(Math.hypot(dx, dy));
+      coordsEl.textContent = "x: " + x + ", y: " + y + ", distance: " + currentDistance;
+    }
+
+    document.getElementById("game").addEventListener("touchstart", updatePosition);
+    document.getElementById("game").addEventListener("touchmove", updatePosition);
+
+    spawnTarget();
+    vibrationLoop();
   </script>
 
 </body>
