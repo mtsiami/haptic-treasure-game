@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vibration Test</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    button { font-size: 1.4rem; padding: 20px; width: 100%; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h2>Τεστ δόνησης</h2>
+  <p id="support"></p>
+  <button id="btn1">Μία δόνηση (300ms)</button>
+  <button id="btn2">Native δόνηση (300ms)</button>
+
+  <script>
+    const support = document.getElementById("support");
+    support.textContent = ("vibrate" in navigator)
+      ? "Ο browser υποστηρίζει Vibration API"
+      : "Ο browser δεν υποστηρίζεται";
+
+    document.getElementById("btn1").addEventListener("click", () => {
+      const ok = navigator.vibrate(300);
+      console.log("vibrate returned:", ok);
+    });
+
+    document.getElementById("btn2").addEventListener("click", async () => {
+      await Capacitor.Plugins.Haptics.vibrate({ duration: 300 });
+    });
+  </script>
+</body>
+</html>

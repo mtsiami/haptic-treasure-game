@@ -3,32 +3,53 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vibration Test</title>
+  <title>Κυνήγι Θησαυρού</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    button { font-size: 1.4rem; padding: 20px; width: 100%; margin: 10px 0; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #game {
+      width: 100vw;
+      height: 100vh;
+      background: #222;
+      position: relative;
+      touch-action: none;
+    }
+
+    #coords {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 1.2rem;
+      font-family: sans-serif;
+      z-index: 10;
+    }
   </style>
 </head>
 <body>
-  <h2>Τεστ δόνησης</h2>
-  <p id="support"></p>
-  <button id="btn1">Μία δόνηση (300ms)</button>
-  <button id="btn2">Native δόνηση (300ms)</button>
+
+  <div id="game">
+    <div id="coords">x: 0, y: 0</div>
+  </div>
 
   <script>
-    const support = document.getElementById("support");
-    support.textContent = ("vibrate" in navigator)
-      ? "Ο browser υποστηρίζει Vibration API"
-      : "Ο browser δεν υποστηρίζεται";
-
-    document.getElementById("btn1").addEventListener("click", () => {
-      const ok = navigator.vibrate(300);
-      console.log("vibrate returned:", ok);
-    });
-
-    document.getElementById("btn2").addEventListener("click", async () => {
-      await Capacitor.Plugins.Haptics.vibrate({ duration: 300 });
-    });
+    const coordsEl = document.getElementById("coords");
+    document.getElementById("game").addEventListener("touchstart", (e) => {
+    const x = Math.round(e.touches[0].clientX);
+    const y = Math.round(e.touches[0].clientY);
+    coordsEl.textContent = "x: " + x + ", y: " + y;
+    document.getElementById("game").addEventListener("touchmove", (e) => {
+    const x = Math.round(e.touches[0].clientX);
+    const y = Math.round(e.touches[0].clientY);
+    coordsEl.textContent = "x: " + x + ", y: " + y;
+});
+});
   </script>
+
 </body>
 </html>
