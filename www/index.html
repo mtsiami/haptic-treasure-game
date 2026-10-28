@@ -3,17 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Κυνήγι Θησαυρού</title>
+  <title>Κυνήγι θησαυρού</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div id="game">
-    <div id="coords">x: 0, y: 0</div>
-    <div id="level">Level 1/10</div>
-    <div id="target"></div>
-    <div id="overlay"></div>
-  </div>
+<div id="game">
+  <div id="coords">x: 0, y: 0</div>
+  <div id="level">Level 1/10</div>
+  <div id="target"></div>
+  <div id="obstacles"></div>
+  <div id="overlay"></div>
+</div>
 
   <script>
     /* ============================================================
@@ -23,6 +24,9 @@
     const levelEl = document.getElementById("level");
     const targetEl = document.getElementById("target");
     const overlay = document.getElementById("overlay");
+    const OBSTACLE_RADIUS = 25; // πόσο κοντά σημαίνει "άγγιξες εμπόδιο"
+    let obstacles = [];         // θέσεις εμποδίων [{x, y}, ...]
+    let obstacleInside = [];    // true/false ανά εμπόδιο: είσαι ΤΩΡΑ μέσα σε αυτό;
 
     const TOTAL_LEVELS = 10;
 
@@ -65,6 +69,55 @@
       targetY = Math.random() * window.innerHeight;
       targetEl.style.left = targetX + "px";
       targetEl.style.top = targetY + "px";
+    }
+
+    /* Πόσα εμπόδια έχει το κάθε level: 1 στα πρώτα, μέχρι 3 στα τελευταία */
+    function obstacleCountForLevel(lvl) {
+      return Math.min(3, 1 + Math.floor((lvl - 1) / 4));
+    }
+
+    /* Δημιουργεί τα εμπόδια του level, σε τυχαίες θέσεις, μακριά
+    από τον θησαυρό ώστε να μην είναι αδύνατο το παιχνίδι */
+    function spawnObstacles(lvl) {
+      const container = document.getElementById("obstacles");
+      container.innerHTML = ""; // καθαρίζουμε τα εμπόδια του προηγούμενου level
+      obstacles = [];
+      obstacleInside = [];
+      const count = obstacleCountForLevel(lvl);
+
+      for (let i = 0; i < count; i++) {
+        let ox, oy, tooClose;
+        // ξαναδοκιμάζουμε μέχρι να βρούμε θέση αρκετά μακριά από τον θησαυρό
+        do {
+          ox = Math.random() * window.innerWidth;
+          oy = Math.random() * window.innerHeight;
+          const distToTarget = Math.hypot(ox - targetX, oy - targetY);
+          tooClose = distToTarget < 100;
+        } while (tooClose);
+
+        obstacles.push({ x: ox, y: oy });
+        obstacleInside.push(false);
+
+        const el = document.createElement("div");
+        el.className = "obstacle";
+        el.style.left = ox + "px";
+        el.style.top = oy + "px";
+        container.appendChild(el);
+      }
+    }
+
+    /* Μικρή βοηθητική συνάρτηση: "περίμενε x ms" */
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    /* Η ξεχωριστή δόνηση εμποδίου: δύο γρήγοροι παλμοί, για να
+    ξεχωρίζει καθαρά από τον παλμό πλησιάσματος (έναν παλμό)
+    και από τη μεγάλη δόνηση "βρέθηκε" (μία συνεχόμενη) */
+    async function doObstacleVibrate() {
+      await doVibrate(60);
+      await sleep(90);
+      await doVibrate(60);
     }
 
     /* ============================================================
@@ -168,6 +221,7 @@
       foundThreshold = t.found;
       startThreshold = t.start;
       spawnTarget();
+      spawnObstacles(level);
       currentDistance = Infinity;
       isTouching = false;
       levelStartTime = Date.now();
@@ -227,6 +281,19 @@
       const dy = y - targetY;
       currentDistance = Math.round(Math.hypot(dx, dy));
       coordsEl.textContent = "x: " + x + ", y: " + y + ", distance: " + currentDistance;
+
+      // Έλεγχος αν το δάχτυλο μπήκε ή βγήκε από κάποιο εμπόδιο
+      obstacles.forEach((obs, i) => {
+      const d = Math.hypot(x - obs.x, y - obs.y);
+      if (d <= OBSTACLE_RADIUS) {
+        if (!obstacleInside[i]) {
+          obstacleInside[i] = true; // μόλις μπήκε τώρα
+          doObstacleVibrate();      // δονεί ΜΙΑ φορά κατά την είσοδο
+        }
+      } else {
+        obstacleInside[i] = false; // βγήκε, έτοιμο να ξαναδονήσει αν ξαναμπεί
+      }
+      });
     }
 
     document.getElementById("game").addEventListener("touchstart", (e) => {
