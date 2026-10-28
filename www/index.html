@@ -4,81 +4,73 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Κυνήγι Θησαυρού</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-    }
-
-    #game {
-      width: 100vw;
-      height: 100vh;
-      background: #222;
-      position: relative;
-      touch-action: none;
-    }
-
-    #coords {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-size: 1.2rem;
-      font-family: sans-serif;
-      z-index: 10;
-    }
-
-    #message {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #0f0;
-      font-size: 2.5rem;
-      font-family: sans-serif;
-      z-index: 10;
-      display: none;
-    }
-
-    #target {
-      position: absolute;
-      width: 40px;
-      height: 40px;
-      background: red;
-      border-radius: 50%;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <div id="game">
     <div id="coords">x: 0, y: 0</div>
-    <div id="message">🎉 Βρέθηκε!</div>
+    <div id="level">Level 1/10</div>
     <div id="target"></div>
+    <div id="overlay"></div>
   </div>
 
   <script>
+    /* ============================================================
+       ΣΤΟΙΧΕΙΑ ΤΗΣ ΣΕΛΙΔΑΣ (τα "πιάνουμε" μία φορά, στην αρχή)
+    ============================================================ */
     const coordsEl = document.getElementById("coords");
-    const messageEl = document.getElementById("message");
+    const levelEl = document.getElementById("level");
     const targetEl = document.getElementById("target");
+    const overlay = document.getElementById("overlay");
 
-    let currentDistance = Infinity;
-    let isTouching = false;
-    let targetX, targetY;
+    const TOTAL_LEVELS = 10;
 
-    const START_THRESHOLD = 200; // από εδώ και κάτω ξεκινάει δόνηση
-    const FOUND_THRESHOLD = 40;  // πόσο κοντά σημαίνει "βρέθηκε"
+    /* ============================================================
+       ΚΑΤΑΣΤΑΣΗ ΠΑΙΧΝΙΔΙΟΥ (μεταβλητές που αλλάζουν όσο παίζεις)
+    ============================================================ */
+    let level = 1;              // τρέχον επίπεδο
+    let totalScore = 0;         // συνολικό σκορ μέχρι τώρα
+    let levelStartTime = 0;     // πότε ξεκίνησε το τρέχον επίπεδο (για το χρονόμετρο)
+    let currentDistance = Infinity; // πόσο μακριά είναι το δάχτυλο από τον στόχο
+    let isTouching = false;     // αγγίζει αυτή τη στιγμή ο χρήστης την οθόνη;
+    let paused = false;         // true όταν δείχνουμε overlay (popup), σταματά τη δόνηση
+    let targetX, targetY;       // θέση του κρυφού θησαυρού
+    let foundThreshold, startThreshold; // όρια απόστασης για το τρέχον level (αλλάζουν ανά level)
 
+    /* ============================================================
+       ΔΥΣΚΟΛΙΑ: όσο ανεβαίνει το level, μικραίνει ο στόχος
+       και στενεύει η απόσταση από την οποία ξεκινάει η δόνηση
+    ============================================================ */
+    function getThresholds(lvl) {
+      const found = Math.max(15, 40 - lvl * 2);   // ελάχιστο 15px, ώστε να μη γίνει αδύνατο
+      const start = Math.max(100, 200 - lvl * 8);
+      return { found, start };
+    }
+
+    /* ============================================================
+       ΣΚΟΡ: βάση ανάλογα με το level (πιο δύσκολο = πιο πολλοί
+       πόντοι), συν μπόνους αν το βρήκες γρήγορα
+    ============================================================ */
+    function calcScore(elapsedMs, lvl) {
+      const sec = elapsedMs / 1000;
+      const base = 100 * lvl;
+      const speedBonus = Math.max(0, 50 - sec * 5);
+      return Math.round(base + speedBonus);
+    }
+
+    /* Βάζει τον θησαυρό σε νέα τυχαία θέση μέσα στην οθόνη */
     function spawnTarget() {
       targetX = Math.random() * window.innerWidth;
       targetY = Math.random() * window.innerHeight;
       targetEl.style.left = targetX + "px";
       targetEl.style.top = targetY + "px";
-      messageEl.style.display = "none";
     }
 
+    /* ============================================================
+       ΔΟΝΗΣΗ: native μέσω Capacitor (μέσα στην εφαρμογή),
+       ή μέσω browser Vibration API (για δοκιμές σε Chrome)
+    ============================================================ */
     async function doVibrate(duration) {
       try {
         if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Haptics) {
@@ -91,6 +83,8 @@
       }
     }
 
+    /* Πόση παύση ανάμεσα σε παλμούς ανάλογα με την απόσταση
+       (όσο πιο κοντά, τόσο πιο πυκνοί οι παλμοί) */
     function getPause(distance) {
       if (distance > 150) return 550;
       if (distance > 100) return 400;
@@ -99,31 +93,133 @@
       return 100;
     }
 
+    /* ============================================================
+       Ο ΒΡΟΧΟΣ ΔΟΝΗΣΗΣ: τρέχει συνέχεια όσο το παιχνίδι είναι
+       ενεργό, ελέγχει την απόσταση και αποφασίζει αν/πότε δονεί
+    ============================================================ */
     async function vibrationLoop() {
+      if (paused) return; // σταματάει εντελώς όσο δείχνουμε popup
+
       if (!isTouching) {
-        setTimeout(vibrationLoop, 150);
+        setTimeout(vibrationLoop, 150); // δεν δονεί, απλά ξανακοιτάει σε λίγο
         return;
       }
 
-      if (currentDistance <= FOUND_THRESHOLD) {
-        await doVibrate(500);
-        messageEl.style.display = "block";
-        setTimeout(() => {
-          spawnTarget();
-          currentDistance = Infinity;
-        }, 1200);
-        setTimeout(vibrationLoop, 1500);
+      if (currentDistance <= foundThreshold) {
+        await doVibrate(500); // μεγάλη δόνηση = "βρέθηκε"
+        onLevelFound();
         return;
       }
 
-      if (currentDistance <= START_THRESHOLD) {
-        await doVibrate(50);
+      if (currentDistance <= startThreshold) {
+        await doVibrate(50); // σύντομος παλμός
         setTimeout(vibrationLoop, getPause(currentDistance));
       } else {
-        setTimeout(vibrationLoop, 150);
+        setTimeout(vibrationLoop, 150); // πολύ μακριά ακόμα, καμία δόνηση
       }
     }
 
+    /* ============================================================
+       ΤΕΛΟΣ ΕΠΙΠΕΔΟΥ: υπολογίζουμε σκορ/χρόνο και δείχνουμε
+       το popup "Βρέθηκε!" με επιλογές Συνέχεια/Τέλος
+    ============================================================ */
+    function onLevelFound() {
+      paused = true;
+      const elapsed = Date.now() - levelStartTime;
+      const score = calcScore(elapsed, level);
+      totalScore += score;
+      showContinueOverlay(elapsed, score);
+    }
+
+    function showContinueOverlay(elapsedMs, score) {
+      const sec = (elapsedMs / 1000).toFixed(1);
+      overlay.innerHTML = `
+        <h2>🎉 Βρέθηκε!</h2>
+        <p>Χρόνος: ${sec}s</p>
+        <p>Πόντοι επιπέδου: ${score}</p>
+        <p>Συνολικό σκορ: ${totalScore}</p>
+        <div>
+          <button id="continueBtn">Συνέχεια</button>
+          <button id="endBtn">Τέλος</button>
+        </div>
+      `;
+      overlay.style.display = "flex";
+      // Προσθέτουμε τους listeners ΜΕΤΑ το innerHTML, γιατί τα κουμπιά
+      // μόλις δημιουργήθηκαν και δεν υπήρχαν πριν
+      document.getElementById("continueBtn").addEventListener("click", nextLevel);
+      document.getElementById("endBtn").addEventListener("click", showEndScreen);
+    }
+
+    /* Πάει στο επόμενο level, ή τερματίζει αν ήταν το τελευταίο */
+    function nextLevel() {
+      if (level >= TOTAL_LEVELS) {
+        showEndScreen();
+        return;
+      }
+      level++;
+      startLevel();
+    }
+
+    /* Ξεκινάει (ή επανεκκινεί) ένα level: κρύβει το popup, φτιάχνει
+       νέο στόχο, μηδενίζει μετρητές, ξεκινάει ξανά τον βρόχο δόνησης */
+    function startLevel() {
+      overlay.style.display = "none";
+      const t = getThresholds(level);
+      foundThreshold = t.found;
+      startThreshold = t.start;
+      spawnTarget();
+      currentDistance = Infinity;
+      isTouching = false;
+      levelStartTime = Date.now();
+      levelEl.textContent = "Level " + level + "/" + TOTAL_LEVELS;
+      paused = false;
+      vibrationLoop();
+    }
+
+    /* ============================================================
+       ΤΟΠΙΚΗ ΚΑΤΑΤΑΞΗ: αποθηκεύει το σκορ στο localStorage του
+       κινητού (μένει εκεί ακόμα κι αν κλείσεις την εφαρμογή)
+       και επιστρέφει τα 5 καλύτερα σκορ
+    ============================================================ */
+    function saveScore(score) {
+      let scores = JSON.parse(localStorage.getItem("highscores") || "[]");
+      scores.push({ score: score, date: new Date().toLocaleDateString("el-GR") });
+      scores.sort((a, b) => b.score - a.score); // μεγαλύτερο σκορ πρώτα
+      scores = scores.slice(0, 5); // κρατάμε μόνο τα 5 καλύτερα
+      localStorage.setItem("highscores", JSON.stringify(scores));
+      return scores;
+    }
+
+    /* Τελική οθόνη: συνολικό σκορ + κατάταξη + κουμπί επανεκκίνησης */
+    function showEndScreen() {
+      paused = true;
+      const scores = saveScore(totalScore);
+      const list = scores
+        .map((s, i) => (i + 1) + ". " + s.score + " πόντοι (" + s.date + ")")
+        .join("<br>");
+
+      overlay.innerHTML = `
+        <h2>Τέλος παιχνιδιού!</h2>
+        <p>Συνολικό σκορ: ${totalScore}</p>
+        <p>Επίπεδα: ${level}/${TOTAL_LEVELS}</p>
+        <h3>🏆 Κορυφαία σκορ (στο κινητό σου)</h3>
+        <p>${list}</p>
+        <button id="restartBtn">Παίξε ξανά</button>
+      `;
+      overlay.style.display = "flex";
+      document.getElementById("restartBtn").addEventListener("click", restartGame);
+    }
+
+    function restartGame() {
+      level = 1;
+      totalScore = 0;
+      startLevel();
+    }
+
+    /* ============================================================
+       ΑΦΗ: ενημερώνει τη θέση δαχτύλου και την απόσταση από τον
+       στόχο, κάθε φορά που το δάχτυλο ακουμπάει ή κινείται
+    ============================================================ */
     function updatePosition(e) {
       const x = Math.round(e.touches[0].clientX);
       const y = Math.round(e.touches[0].clientY);
@@ -142,8 +238,8 @@
       isTouching = false;
     });
 
-    spawnTarget();
-    vibrationLoop();
+    /* Εκκίνηση παιχνιδιού όταν φορτώνει η σελίδα */
+    startLevel();
   </script>
 
 </body>
