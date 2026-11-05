@@ -28,7 +28,6 @@
     const TOTAL_LEVELS = 10;
     let timerInterval = null; // το "ρολόι" που ανανεώνει το χρονόμετρο
     const timerEl = document.getElementById("timer"); // μαζί με τα coordsEl, levelEl κλπ
-    let blindMode = false; // true = λειτουργία με κλειστά μάτια
 
     //μεταβλητές που αλλάζουν όσο παίζεις)
     let level = 1;              // τρέχον επίπεδο
@@ -63,9 +62,8 @@
       targetEl.style.top = targetY + "px";
     }
 
-    //διαβάζει φωναχτά ένα κείμενο, αλλά ΜΟΝΟ αν είναι ενεργή η λειτουργία "κλειστά μάτια"
+    //διαβάζει φωναχτά ένα κείμενο
     function speak(text) {
-      if (!blindMode) return;
       if (!("speechSynthesis" in window)) return;
       speechSynthesis.cancel(); // σταματά τυχόν προηγούμενη ομιλία πριν πει τη νέα
       const utter = new SpeechSynthesisUtterance(text);
@@ -77,23 +75,11 @@
     function showCalibrationScreen() {
       overlay.innerHTML = `
       <h2>👋 Καλωσήρθες!</h2>
-      <p>Το παιχνίδι παίζεται μόνο με δόνηση.</p>
-      <div>
-        <button id="modeNormalBtn">👁️ Κανονική λειτουργία</button>
-        <button id="modeBlindBtn" style="background:#555;">🙈 Με κλειστά μάτια</button>
-      </div>
-      <p>Τρέχουσα επιλογή: ${blindMode ? "Με κλειστά μάτια" : "Κανονική"}</p>
+      <p>Το παιχνίδι παίζεται μόνο με δόνηση, χωρίς οπτικά στοιχεία.</p>
+      <p>Πάτα το κουμπί για να δοκιμάσεις.</p>
       <button id="tryVibrateBtn">📳 Δοκίμασε δόνηση</button>
       `;
       overlay.style.display = "flex";
-      document.getElementById("modeNormalBtn").addEventListener("click", () => {
-        blindMode = false;
-        showCalibrationScreen();
-      });
-      document.getElementById("modeBlindBtn").addEventListener("click", () => {
-        blindMode = true;
-        showCalibrationScreen();
-      });
       document.getElementById("tryVibrateBtn").addEventListener("click", runCalibrationDemo);
     }
 
@@ -280,8 +266,6 @@
     //νέο στόχο, μηδενίζει μετρητές, ξεκινάει ξανά τον βρόχο δόνησης
     function startLevel() {
       overlay.style.display = "none";
-      //ενεργοποιεί ή απενεργοποιεί την κλάση blind-mode στο #game
-      document.getElementById("game").classList.toggle("blind-mode", blindMode);
       const t = getThresholds(level);
       foundThreshold = t.found;
       startThreshold = t.start;

@@ -6,44 +6,22 @@ html, body {
   overflow: hidden;
 }
 
-/* Η περιοχή του παιχνιδιού, πιάνει όλη την οθόνη */
+/* Η περιοχή του παιχνιδιού, πιάνει όλη την οθόνη, πάντα μαύρη */
 #game {
   width: 100vw;
   height: 100vh;
-  background: #222;
+  background: #000;
   position: relative;
   touch-action: none; /* εμποδίζει scroll/zoom όταν σέρνεις το δάχτυλο */
 }
 
-/* Κειμενάκι πάνω αριστερά: δείχνει θέση δαχτύλου + απόσταση (debug info) */
-#coords {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  color: white;
-  font-size: 1.1rem;
-  font-family: 'Times New Roman', Times, serif;
-  z-index: 10;
-}
-
-/* Δείχνει "Level X/10" πάνω δεξιά */
-#level {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  color: white;
-  font-size: 1.2rem;
-  font-family: sans-serif;
-  z-index: 10;
-}
-
-/* Ο (προσωρινά ορατός) θησαυρός */
-#target {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  background: red;
-  border-radius: 50%;
+/* Μαύρη οθόνη για όλους, χωρίς εξαίρεση: κανένα οπτικό στοιχείο δεν φαίνεται */
+#coords,
+#level,
+#timer,
+#target,
+.obstacle {
+  display: none;
 }
 
 /* Full-screen μαύρο επικάλυμμα, χρησιμοποιείται και για το
@@ -95,37 +73,4 @@ html, body {
   position: absolute;
   top: 0; left: 0;
   width: 100%; height: 100%;
-}
-
-/* Κάθε εμπόδιο: μικρός πορτοκαλί κύκλος (προσωρινά ορατός, για debug) */
-.obstacle {
-  position: absolute;
-  width: 35px;
-  height: 35px;
-  background: orange;
-  border-radius: 50%;
-}
-
-#timer {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: white;
-  font-size: 1.3rem;
-  font-family: sans-serif;
-  z-index: 10;
-}
-
-/* Λειτουργία "με κλειστά μάτια": κρύβει όλα τα οπτικά στοιχεία,
-   μένει μόνο μαύρη οθόνη */
-#game.blind-mode {
-  background: #000;
-}
-#game.blind-mode #coords,
-#game.blind-mode #level,
-#game.blind-mode #timer,
-#game.blind-mode #target,
-#game.blind-mode .obstacle {
-  display: none;
 }
