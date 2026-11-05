@@ -63,12 +63,28 @@
     }
 
     //διαβάζει φωναχτά ένα κείμενο
-    function speak(text) {
-      if (!("speechSynthesis" in window)) return;
-      speechSynthesis.cancel(); // σταματά τυχόν προηγούμενη ομιλία πριν πει τη νέα
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = "el-GR";
-      speechSynthesis.speak(utter);
+    //διαβάζει φωναχτά ένα κείμενο, native μέσω plugin μέσα στην εφαρμογή,
+    //ή μέσω browser API όταν δοκιμάζεις σε Chrome
+    async function speak(text) {
+      try {
+      if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.TextToSpeech) {
+        await Capacitor.Plugins.TextToSpeech.speak({
+          text: text,
+          lang: "el-GR",
+          rate: 1.0,
+          pitch: 1.0,
+          volume: 1.0,
+          category: "ambient"
+        });
+      } else if ("speechSynthesis" in window) {
+        speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = "el-GR";
+        speechSynthesis.speak(utter);
+      }
+      } catch (err) {
+        console.log("speak error:", err);
+      }
     }
 
     //η πρώτη οθόνη που βλέπει ο χρήστης, πριν ξεκινήσει το παιχνίδι
