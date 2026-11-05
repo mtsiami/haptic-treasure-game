@@ -28,6 +28,7 @@
     const TOTAL_LEVELS = 10;
     let timerInterval = null; // το "ρολόι" που ανανεώνει το χρονόμετρο
     const timerEl = document.getElementById("timer"); // μαζί με τα coordsEl, levelEl κλπ
+    let blindMode = false; // true = λειτουργία με κλειστά μάτια
 
     //μεταβλητές που αλλάζουν όσο παίζεις)
     let level = 1;              // τρέχον επίπεδο
@@ -60,6 +61,77 @@
       targetY = Math.random() * window.innerHeight;
       targetEl.style.left = targetX + "px";
       targetEl.style.top = targetY + "px";
+    }
+
+    //διαβάζει φωναχτά ένα κείμενο, αλλά ΜΟΝΟ αν είναι ενεργή η λειτουργία "κλειστά μάτια"
+    function speak(text) {
+      if (!blindMode) return;
+      if (!("speechSynthesis" in window)) return;
+      speechSynthesis.cancel(); // σταματά τυχόν προηγούμενη ομιλία πριν πει τη νέα
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = "el-GR";
+      speechSynthesis.speak(utter);
+    }
+
+    //η πρώτη οθόνη που βλέπει ο χρήστης, πριν ξεκινήσει το παιχνίδι
+    function showCalibrationScreen() {
+      overlay.innerHTML = `
+      <h2>👋 Καλωσήρθες!</h2>
+      <p>Το παιχνίδι παίζεται μόνο με δόνηση.</p>
+      <div>
+        <button id="modeNormalBtn">👁️ Κανονική λειτουργία</button>
+        <button id="modeBlindBtn" style="background:#555;">🙈 Με κλειστά μάτια</button>
+      </div>
+      <p>Τρέχουσα επιλογή: ${blindMode ? "Με κλειστά μάτια" : "Κανονική"}</p>
+      <button id="tryVibrateBtn">📳 Δοκίμασε δόνηση</button>
+      `;
+      overlay.style.display = "flex";
+      document.getElementById("modeNormalBtn").addEventListener("click", () => {
+        blindMode = false;
+        showCalibrationScreen();
+      });
+      document.getElementById("modeBlindBtn").addEventListener("click", () => {
+        blindMode = true;
+        showCalibrationScreen();
+      });
+      document.getElementById("tryVibrateBtn").addEventListener("click", runCalibrationDemo);
+    }
+
+    //παίζει 3 σύντομους παλμούς, ίδιο ύφος με τη δόνηση πλησιάσματος μέσα στο παιχνίδι
+    async function runCalibrationDemo() {
+      for (let i = 0; i < 3; i++) {
+        await doVibrate(50);
+        await sleep(300);
+      }
+      showCalibrationQuestion();
+    }
+
+    //ρωτάει αν ένιωσε τη δόνηση
+    function showCalibrationQuestion() {
+      overlay.innerHTML = `
+      <h2>Ένιωσες κάτι;</h2>
+      <div>
+      <button id="feltYesBtn">Ναι</button>
+      <button id="feltNoBtn" style="background:#555;">Όχι</button>
+      </div>
+      `;
+      document.getElementById("feltYesBtn").addEventListener("click", () => {
+        overlay.style.display = "none";
+        startLevel();
+      });
+      document.getElementById("feltNoBtn").addEventListener("click", showCalibrationHelp);
+    }
+
+    //οδηγίες αν δεν ένιωσε τίποτα
+    function showCalibrationHelp() {
+      overlay.innerHTML = `
+      <h2>Δεν ένιωσες κάποια δόνηση;</h2>
+      <p>Πήγαινε:</p>
+      <p>-) Ρυθμίσεις → Ήχος &amp; δόνηση → ενεργοποίησε το "Haptic feedback"</p>
+      <p>-) Απενεργοποίησε την "εξοικονόμηση μπαταρίας/ενέργειας"</p>
+      <button id="retryBtn">Ξαναδοκίμασε</button>
+      `;
+      document.getElementById("retryBtn").addEventListener("click", showCalibrationScreen);
     }
 
     /* Ξεκινάει το ορατό χρονόμετρο: ανανεώνει την οθόνη κάθε 100ms */
@@ -178,7 +250,7 @@
     function showContinueOverlay(elapsedMs, score) {
       const sec = (elapsedMs / 1000).toFixed(1);
       overlay.innerHTML = `
-        <h2>🎉 Βρέθηκε!</h2>
+        <h2>Ο θησαυρός βρέθηκε!</h2>
         <p>Χρόνος: ${sec}s</p>
         <p>Πόντοι επιπέδου: ${score}</p>
         <p>Συνολικό σκορ: ${totalScore}</p>
@@ -187,6 +259,7 @@
           <button id="endBtn">Τέλος</button>
         </div>
       `;
+      speak("Βρέθηκε! Χρόνος " + sec + " δευτερόλεπτα. " + score + " πόντοι.");
       overlay.style.display = "flex";
       //προσθέτουμε τους listeners ΜΕΤΑ το innerHTML, γιατί τα κουμπιά μόλις δημιουργήθηκαν και δεν υπήρχαν πριν
       document.getElementById("continueBtn").addEventListener("click", nextLevel);
@@ -207,6 +280,8 @@
     //νέο στόχο, μηδενίζει μετρητές, ξεκινάει ξανά τον βρόχο δόνησης
     function startLevel() {
       overlay.style.display = "none";
+      //ενεργοποιεί ή απενεργοποιεί την κλάση blind-mode στο #game
+      document.getElementById("game").classList.toggle("blind-mode", blindMode);
       const t = getThresholds(level);
       foundThreshold = t.found;
       startThreshold = t.start;
@@ -217,6 +292,7 @@
       levelStartTime = Date.now();
       startTimerDisplay();
       levelEl.textContent = "Level " + level + "/" + TOTAL_LEVELS;
+      speak("Επίπεδο " + level);
       paused = false;
       vibrationLoop();
     }
@@ -248,6 +324,7 @@
         <p>${list}</p>
         <button id="restartBtn">Παίξε ξανά</button>
       `;
+      speak("Τέλος παιχνιδιού. Συνολικό σκορ " + totalScore + " πόντοι.");
       overlay.style.display = "flex";
       document.getElementById("restartBtn").addEventListener("click", restartGame);
     }
@@ -292,7 +369,7 @@
     });
 
     //εκκίνηση παιχνιδιού όταν φορτώνει η σελίδα
-    startLevel();
+    showCalibrationScreen();
   </script>
 
 </body>

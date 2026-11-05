@@ -116,3 +116,16 @@ html, body {
   font-family: sans-serif;
   z-index: 10;
 }
+
+/* Λειτουργία "με κλειστά μάτια": κρύβει όλα τα οπτικά στοιχεία,
+   μένει μόνο μαύρη οθόνη */
+#game.blind-mode {
+  background: #000;
+}
+#game.blind-mode #coords,
+#game.blind-mode #level,
+#game.blind-mode #timer,
+#game.blind-mode #target,
+#game.blind-mode .obstacle {
+  display: none;
+}
