@@ -116,10 +116,10 @@
   // ============================================================
   function showMainMenu() {
     overlay.innerHTML = `
-      <div class="title-card"><h2>🏴‍☠️ Κυνήγι Θησαυρού</h2></div>
+      <div class="title-card"><h2>🏴‍☠️ Haptic Treasure Hunt</h2></div>
       <button id="startBtn">▶️ Έναρξη</button>
       <button id="leaderboardBtn" class="secondary">🏆 Κατάταξη</button>
-      <button id="exitBtn" class="secondary">🚪 Έξοδος</button>
+      <button id="exitBtn" class="secondary">❌ Έξοδος</button>
     `;
     overlay.style.display = "flex";
     document.getElementById("startBtn").addEventListener("click", showCalibrationScreen);
@@ -168,7 +168,7 @@
       <div class="title-card"><h2>🔧 Δεν νιώθεις δόνηση;</h2></div>
       <p>1) Ρυθμίσεις → Ήχος & δόνηση → ενεργοποίησε "Haptic feedback"</p>
       <p>2) Απενεργοποίησε την Εξοικονόμηση μπαταρίας</p>
-      <button id="retryBtn">🔁 Δοκίμασε ξανά</button>
+      <button id="retryBtn">🔁 Παίξε ξανά</button>
       <button id="backBtn2" class="secondary">◀️ Πίσω στο μενού</button>
     `;
     overlay.style.display = "flex";
@@ -320,13 +320,13 @@
     // Το κουμπί δείχνει σε ποιο level πάει ο παίκτης. Στο τελευταίο level
     // αλλάζει κείμενο, αφού δεν υπάρχει επόμενο αλλά τελικό αποτέλεσμα.
     const nextLabel = (level < TOTAL_LEVELS)
-      ? `➡️ Επόμενο level (${level + 1}/${TOTAL_LEVELS})`
-      : "🏁 Τελικό αποτέλεσμα";
+      ? `Επόμενο επίπεδο (${level + 1}/${TOTAL_LEVELS})`
+      : "Τελικό αποτέλεσμα";
 
     overlay.innerHTML = `
       <div class="title-card"><h2>🎉 Ο θησαυρός βρέθηκε!</h2></div>
       <p>Χρόνος: ${sec}s</p>
-      <p>Πόντοι level: ${score}</p>
+      <p>Πόντοι: ${score}</p>
       <p>Σύνολο: ${totalScore}</p>
       <button id="nextBtn">${nextLabel}</button>
     `;
@@ -433,7 +433,7 @@
     overlay.innerHTML = `
       <div class="title-card"><h2>🏆 Κατάταξη</h2></div>
       <div class="leaderboard-list">${rowsHtml}</div>
-      <button id="backBtn" class="secondary">◀️ Πίσω</button>
+      <button id="backBtn" class="secondary">Πίσω</button>
     `;
     overlay.style.display = "flex";
     document.getElementById("backBtn").addEventListener("click", showMainMenu);
