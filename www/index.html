@@ -316,12 +316,19 @@
   function showContinueOverlay(elapsedMs, score) {
     const sec = Math.floor(elapsedMs / 1000);
     speak("Βρέθηκε! Χρόνος " + sec + " δευτερόλεπτα, βαθμολογία " + score);
+
+    // Το κουμπί δείχνει σε ποιο level πάει ο παίκτης. Στο τελευταίο level
+    // αλλάζει κείμενο, αφού δεν υπάρχει επόμενο αλλά τελικό αποτέλεσμα.
+    const nextLabel = (level < TOTAL_LEVELS)
+      ? `➡️ Επόμενο level (${level + 1}/${TOTAL_LEVELS})`
+      : "🏁 Τελικό αποτέλεσμα";
+
     overlay.innerHTML = `
       <div class="title-card"><h2>🎉 Βρέθηκε!</h2></div>
       <p>Χρόνος: ${sec}s</p>
       <p>Πόντοι level: ${score}</p>
       <p>Σύνολο: ${totalScore}</p>
-      <button id="nextBtn">➡️ Επόμενο level</button>
+      <button id="nextBtn">${nextLabel}</button>
     `;
     overlay.style.display = "flex";
     document.getElementById("nextBtn").addEventListener("click", nextLevel);
@@ -378,13 +385,16 @@
     speak("Τέλος παιχνιδιού. Συνολική βαθμολογία " + totalScore);
     overlay.innerHTML = `
       <div class="title-card"><h2>🏁 Τέλος παιχνιδιού!</h2></div>
+      <div class="title-card"><h3>Συγχαρητήρια! Ολοκλήρωσες επιτυχώς όλα τα επίπεδα! </h3></div>
       <p>Παίκτης: ${playerName}</p>
       <p>Συνολικό σκορ: ${totalScore}</p>
-      <button id="endBtn">🔁 Ξανά</button>
-      <button id="menuBtn" class="secondary">🏠 Μενού</button>
+      <button id="endBtn">🔁 Παίξε ξανά!</button>
+      <button id="scoresBtn" class="secondary">🏆 Κατάταξη</button>
+      <button id="menuBtn" class="secondary">🏠 Επιστροφή στο μενού</button>
     `;
     overlay.style.display = "flex";
     document.getElementById("endBtn").addEventListener("click", restartGame);
+    document.getElementById("scoresBtn").addEventListener("click", showLeaderboardScreen);
     document.getElementById("menuBtn").addEventListener("click", showMainMenu);
   }
 
