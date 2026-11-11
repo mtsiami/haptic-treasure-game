@@ -2,71 +2,95 @@
 <html lang="el">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Κυνήγι θησαυρού</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Κυνήγι Θησαυρού</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div id="game">
-  <div id="coords">x: 0, y: 0</div>
-  <div id="level">Level 1/10</div>
-  <div id="timer">0.0s</div>
-  <div id="target"></div>
-  <div id="obstacles"></div>
-  <div id="overlay"></div>
-</div>
+  <!-- ========================================================
+       Ο καμβάς του παιχνιδιού. Παραμένει ΠΑΝΤΑ μαύρος κατά το
+       gameplay, ώστε να μη βλέπει κανείς τίποτα (δίκαιο για
+       τυφλούς και βλέποντες χρήστες εξίσου).
+       ======================================================== -->
+  <div id="game">
+
+    <!-- Βοηθητικά στοιχεία: μόνιμα κρυφά μέσω display:none στο CSS.
+         Υπάρχουν μόνο για εσωτερική λογική/debugging, ποτέ ορατά. -->
+    <div id="coords"></div>
+    <div id="level"></div>
+    <div id="timer"></div>
+    <div id="target"></div>
+    <div id="obstacles"></div>
+
+    <!-- Το overlay φιλοξενεί ΟΛΕΣ τις οθόνες μενού:
+         κύριο μενού, calibration, όνομα παίκτη, κατάταξη, τέλος level/παιχνιδιού -->
+    <div id="overlay"></div>
+
+  </div>
 
   <script>
-    const coordsEl = document.getElementById("coords");
-    const levelEl = document.getElementById("level");
-    const targetEl = document.getElementById("target");
-    const overlay = document.getElementById("overlay");
-    const OBSTACLE_RADIUS = 25; // πόσο κοντά σημαίνει "άγγιξες εμπόδιο"
-    let obstacles = [];         // θέσεις εμποδίων [{x, y}, ...]
-    let obstacleInside = [];    // true/false ανά εμπόδιο: είσαι ΤΩΡΑ μέσα σε αυτό;
-    const TOTAL_LEVELS = 10;
-    let timerInterval = null; // το "ρολόι" που ανανεώνει το χρονόμετρο
-    const timerEl = document.getElementById("timer"); // μαζί με τα coordsEl, levelEl κλπ
+  // ============================================================
+  // ΑΝΑΦΟΡΕΣ ΣΕ HTML ΣΤΟΙΧΕΙΑ
+  // ============================================================
+  const coordsEl = document.getElementById("coords");
+  const levelEl = document.getElementById("level");
+  const targetEl = document.getElementById("target");
+  const overlay = document.getElementById("overlay");
+  const timerEl = document.getElementById("timer");
 
-    //μεταβλητές που αλλάζουν όσο παίζεις)
-    let level = 1;              // τρέχον επίπεδο
-    let totalScore = 0;         // συνολικό σκορ μέχρι τώρα
-    let levelStartTime = 0;     // πότε ξεκίνησε το τρέχον επίπεδο (για το χρονόμετρο)
-    let currentDistance = Infinity; // πόσο μακριά είναι το δάχτυλο από τον στόχο
-    let isTouching = false;     // αγγίζει αυτή τη στιγμή ο χρήστης την οθόνη;
-    let paused = false;         // true όταν δείχνουμε overlay (popup), σταματά τη δόνηση
-    let targetX, targetY;       // θέση του κρυφού θησαυρού
-    let foundThreshold, startThreshold; // όρια απόστασης για το τρέχον level (αλλάζουν ανά level)
+  // ============================================================
+  // ΣΤΑΘΕΡΕΣ & ΜΕΤΑΒΛΗΤΕΣ ΚΑΤΑΣΤΑΣΗΣ
+  // ============================================================
+  const OBSTACLE_RADIUS = 25;   // ακτίνα (px) μέσα στην οποία θεωρούμε ότι πατήσαμε εμπόδιο
+  const TOTAL_LEVELS = 10;      // συνολικά επίπεδα του παιχνιδιού
 
-    //όσο ανεβαίνει το level, μικραίνει ο στόχος και στενεύει η απόσταση από την οποία ξεκινάει η δόνηση
-    function getThresholds(lvl) {
-      const found = Math.max(15, 40 - lvl * 2);   // ελάχιστο 15px, ώστε να μη γίνει αδύνατο
-      const start = Math.max(100, 200 - lvl * 8);
-      return { found, start };
-    }
+  let obstacles = [];           // λίστα εμποδίων τρέχοντος level {x, y}
+  let obstacleInside = [];      // flag ανά εμπόδιο: είμαστε ήδη μέσα; (για να μη δονείται συνέχεια)
+  let timerInterval = null;
+  let level = 1;
+  let totalScore = 0;
+  let levelStartTime = 0;
+  let currentDistance = Infinity;
+  let isTouching = false;
+  let paused = false;
+  let targetX, targetY;         // συντεταγμένες κρυμμένου θησαυρού
+  let foundThreshold, startThreshold;
+  let playerName = "Ανώνυμος";  // όνομα παίκτη, ζητείται πριν το 1ο level
 
-    //βάση ανάλογα με το level (πιο δύσκολο = πιο πολλοίπόντοι), συν μπόνους αν το βρήκες γρήγορα
-    function calcScore(elapsedMs, lvl) {
-      const sec = elapsedMs / 1000;
-      const base = 100 * lvl;
-      const speedBonus = Math.max(0, 50 - sec * 5);
-      return Math.round(base + speedBonus);
-    }
+  // ============================================================
+  // ΔΥΣΚΟΛΙΑ ΑΝΑ LEVEL
+  // Όσο ανεβαίνει το level, μικραίνουν οι ακτίνες -> πιο δύσκολη εύρεση
+  // ============================================================
+  function getThresholds(lvl) {
+    const found = Math.max(30, 70 - lvl * 4);     // ακτίνα "βρέθηκε" (κάτω όριο 30 για να μην γίνει αδύνατο)
+    const start = Math.max(150, 320 - lvl * 15);  // ακτίνα από την οποία αρχίζει η δόνηση
+    return { found, start };
+  }
 
-    //βάζει τον θησαυρό σε νέα τυχαία θέση μέσα στην οθόνη
-    function spawnTarget() {
-      targetX = Math.random() * window.innerWidth;
-      targetY = Math.random() * window.innerHeight;
-      targetEl.style.left = targetX + "px";
-      targetEl.style.top = targetY + "px";
-    }
+  // Σκορ = βάση ανάλογη της δυσκολίας + bonus ταχύτητας (όσο πιο γρήγορα, τόσο περισσότεροι πόντοι)
+  function calcScore(elapsedMs, lvl) {
+    const sec = elapsedMs / 1000;
+    const base = 100 * lvl;
+    const speedBonus = Math.max(0, 50 - sec * 5);
+    return Math.round(base + speedBonus);
+  }
 
-    //διαβάζει φωναχτά ένα κείμενο
-    //διαβάζει φωναχτά ένα κείμενο, native μέσω plugin μέσα στην εφαρμογή,
-    //ή μέσω browser API όταν δοκιμάζεις σε Chrome
-    async function speak(text) {
-      try {
+  // Τυχαία τοποθέτηση του θησαυρού στην οθόνη (με περιθώριο από τις άκρες)
+  function spawnTarget() {
+    const margin = 40;
+    targetX = margin + Math.random() * (window.innerWidth - margin * 2);
+    targetY = margin + Math.random() * (window.innerHeight - margin * 2);
+  }
+
+  // ============================================================
+  // ΦΩΝΗΤΙΚΗ ΑΝΑΤΡΟΦΟΔΟΤΗΣΗ (Text-To-Speech)
+  // Δοκιμάζει πρώτα το NATIVE plugin (δουλεύει μέσα στο εγκατεστημένο APK).
+  // Fallback: Web Speech API — ΠΡΟΣΟΧΗ, αυτό ΔΕΝ λειτουργεί μέσα στο
+  // Capacitor WebView, μόνο σε κανονικό browser (διαπιστωμένο κατά την ανάπτυξη).
+  // ============================================================
+  async function speak(text) {
+    try {
       if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.TextToSpeech) {
         await Capacitor.Plugins.TextToSpeech.speak({
           text: text,
@@ -82,294 +106,390 @@
         utter.lang = "el-GR";
         speechSynthesis.speak(utter);
       }
-      } catch (err) {
-        console.log("speak error:", err);
-      }
+    } catch (err) {
+      console.log("speak error:", err);
     }
+  }
 
-    //η πρώτη οθόνη που βλέπει ο χρήστης, πριν ξεκινήσει το παιχνίδι
-    function showCalibrationScreen() {
-      overlay.innerHTML = `
-      <h2>👋 Καλωσήρθες!</h2>
-      <p>Το παιχνίδι παίζεται μόνο με δόνηση, χωρίς οπτικά στοιχεία.</p>
-      <p>Πάτα το κουμπί για να δοκιμάσεις.</p>
-      <button id="tryVibrateBtn">📳 Δοκίμασε δόνηση</button>
-      `;
-      overlay.style.display = "flex";
-      document.getElementById("tryVibrateBtn").addEventListener("click", runCalibrationDemo);
+  // ============================================================
+  // ΚΥΡΙΟ ΜΕΝΟΥ — η πρώτη οθόνη που βλέπει ο χρήστης
+  // ============================================================
+  function showMainMenu() {
+    overlay.innerHTML = `
+      <div class="title-card"><h2>🏴‍☠️ Κυνήγι Θησαυρού</h2></div>
+      <button id="startBtn">▶️ Έναρξη</button>
+      <button id="leaderboardBtn" class="secondary">🏆 Κατάταξη</button>
+      <button id="exitBtn" class="secondary">🚪 Έξοδος</button>
+    `;
+    overlay.style.display = "flex";
+    document.getElementById("startBtn").addEventListener("click", showCalibrationScreen);
+    document.getElementById("leaderboardBtn").addEventListener("click", showLeaderboardScreen);
+    document.getElementById("exitBtn").addEventListener("click", exitApp);
+  }
+
+  // ============================================================
+  // CALIBRATION — έλεγχος ότι η δόνηση δουλεύει πριν ξεκινήσει το παιχνίδι.
+  // Ροή: Έναρξη -> Calibration -> (Ναι) -> Όνομα -> Παιχνίδι
+  // ============================================================
+  function showCalibrationScreen() {
+    overlay.innerHTML = `
+      <div class="title-card"><h2>📳 Έλεγχος δόνησης</h2></div>
+      <p>Πριν ξεκινήσουμε, ας ελέγξουμε ότι το κινητό σου δονείται.</p>
+      <button id="demoBtn">📳 Δοκίμασε δόνηση</button>
+    `;
+    overlay.style.display = "flex";
+    document.getElementById("demoBtn").addEventListener("click", runCalibrationDemo);
+  }
+
+  // Τρεις σύντομοι παλμοί σαν δοκιμή και μετά ερώτηση επιβεβαίωσης
+  async function runCalibrationDemo() {
+    for (let i = 0; i < 3; i++) {
+      await doVibrate(150);
+      await sleep(200);
     }
+    showCalibrationQuestion();
+  }
 
-    //παίζει 3 σύντομους παλμούς, ίδιο ύφος με τη δόνηση πλησιάσματος μέσα στο παιχνίδι
-    async function runCalibrationDemo() {
-      for (let i = 0; i < 3; i++) {
-        await doVibrate(50);
-        await sleep(300);
-      }
-      showCalibrationQuestion();
-    }
+  function showCalibrationQuestion() {
+    overlay.innerHTML = `
+      <div class="title-card"><h2>📳 Ένιωσες τη δόνηση;</h2></div>
+      <button id="yesBtn">✅ Ναι</button>
+      <button id="noBtn" class="secondary">❌ Όχι</button>
+    `;
+    overlay.style.display = "flex";
+    document.getElementById("yesBtn").addEventListener("click", showNameEntryScreen);
+    document.getElementById("noBtn").addEventListener("click", showCalibrationHelp);
+  }
 
-    //ρωτάει αν ένιωσε τη δόνηση
-    function showCalibrationQuestion() {
-      overlay.innerHTML = `
-      <h2>Ένιωσες κάτι;</h2>
-      <div>
-      <button id="feltYesBtn">Ναι</button>
-      <button id="feltNoBtn" style="background:#555;">Όχι</button>
-      </div>
-      `;
-      document.getElementById("feltYesBtn").addEventListener("click", () => {
-        overlay.style.display = "none";
-        startLevel();
-      });
-      document.getElementById("feltNoBtn").addEventListener("click", showCalibrationHelp);
-    }
+  // Οδηγίες επίλυσης: σε συσκευές Xiaomi η ρύθμιση "Haptic feedback" είναι
+  // ξεχωριστή από τη δόνηση κλήσεων και μπορεί να μπλοκάρει σιωπηλά τη δόνηση της εφαρμογής
+  function showCalibrationHelp() {
+    overlay.innerHTML = `
+      <div class="title-card"><h2>🔧 Δεν νιώθεις δόνηση;</h2></div>
+      <p>1) Ρυθμίσεις → Ήχος & δόνηση → ενεργοποίησε "Haptic feedback"</p>
+      <p>2) Απενεργοποίησε την Εξοικονόμηση μπαταρίας</p>
+      <button id="retryBtn">🔁 Δοκίμασε ξανά</button>
+      <button id="backBtn2" class="secondary">◀️ Πίσω στο μενού</button>
+    `;
+    overlay.style.display = "flex";
+    document.getElementById("retryBtn").addEventListener("click", showCalibrationScreen);
+    document.getElementById("backBtn2").addEventListener("click", showMainMenu);
+  }
 
-    //οδηγίες αν δεν ένιωσε τίποτα
-    function showCalibrationHelp() {
-      overlay.innerHTML = `
-      <h2>Δεν ένιωσες κάποια δόνηση;</h2>
-      <p>Πήγαινε:</p>
-      <p>-) Ρυθμίσεις → Ήχος &amp; δόνηση → ενεργοποίησε το "Haptic feedback"</p>
-      <p>-) Απενεργοποίησε την "εξοικονόμηση μπαταρίας/ενέργειας"</p>
-      <button id="retryBtn">Ξαναδοκίμασε</button>
-      `;
-      document.getElementById("retryBtn").addEventListener("click", showCalibrationScreen);
-    }
-
-    /* Ξεκινάει το ορατό χρονόμετρο: ανανεώνει την οθόνη κάθε 100ms */
-    function startTimerDisplay() {
-      clearInterval(timerInterval); // σταματάει τυχόν προηγούμενο, πριν ξεκινήσει νέο
-      timerInterval = setInterval(() => {
-        const elapsed = (Date.now() - levelStartTime) / 1000;
-        timerEl.textContent = elapsed.toFixed(1) + "s";
-      }, 100);
-    }
-
-    /* Σταματάει το χρονόμετρο (π.χ. μόλις βρεθεί ο θησαυρός, "παγώνει" εκεί) */
-    function stopTimerDisplay() {
-      clearInterval(timerInterval);
-    }
-
-    //πόσα εμπόδια έχει το κάθε level: 1 στα πρώτα, μέχρι 3 στα τελευταία
-    function obstacleCountForLevel(lvl) {
-      return Math.min(3, 1 + Math.floor((lvl - 1) / 4));
-    }
-
-    //δημιουργεί τα εμπόδια του level, σε τυχαίες θέσεις, μακριά από τον θησαυρό ώστε να μην
-    //είναι αδύνατο το παιχνίδι
-    function spawnObstacles(lvl) {
-      const container = document.getElementById("obstacles");
-      container.innerHTML = ""; // καθαρίζουμε τα εμπόδια του προηγούμενου level
-      obstacles = [];
-      obstacleInside = [];
-      const count = obstacleCountForLevel(lvl);
-
-      for (let i = 0; i < count; i++) {
-        let ox, oy, tooClose;
-        //ξαναδοκιμάζουμε μέχρι να βρούμε θέση αρκετά μακριά από τον θησαυρό
-        do {
-          ox = Math.random() * window.innerWidth;
-          oy = Math.random() * window.innerHeight;
-          const distToTarget = Math.hypot(ox - targetX, oy - targetY);
-          tooClose = distToTarget < 100;
-        } while (tooClose);
-
-        obstacles.push({ x: ox, y: oy });
-        obstacleInside.push(false);
-        const el = document.createElement("div");
-        el.className = "obstacle";
-        el.style.left = ox + "px";
-        el.style.top = oy + "px";
-        container.appendChild(el);
-      }
-    }
-
-    //μικρή βοηθητική συνάρτηση: "περίμενε x ms"
-    function sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-    //η ξεχωριστή δόνηση εμποδίου: δύο γρήγοροι παλμοί, για να ξεχωρίζει καθαρά από τον παλμό πλησιάσματος
-    //(έναν παλμό) και από τη μεγάλη δόνηση "βρέθηκε" (μία συνεχόμενη)
-    async function doObstacleVibrate() {
-      await doVibrate(60);
-      await sleep(90);
-      await doVibrate(60);
-    }
-
-    //native δόνηση μέσω Capacitor (μέσα στην εφαρμογή) ή μέσω browser Vibration API (για δοκιμές σε Chrome)
-    async function doVibrate(duration) {
-      try {
-        if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Haptics) {
-          await Capacitor.Plugins.Haptics.vibrate({ duration });
-        } else if ("vibrate" in navigator) {
-          navigator.vibrate(duration);
-        }
-      } catch (err) {
-        console.log("vibrate error:", err);
-      }
-    }
-
-    //πόση παύση ανάμεσα σε παλμούς ανάλογα με την απόσταση (όσο πιο κοντά, τόσο πιο πυκνοί οι παλμοί)
-    function getPause(distance) {
-      if (distance > 150) return 550;
-      if (distance > 100) return 400;
-      if (distance > 70)  return 280;
-      if (distance > 40)  return 180;
-      return 100;
-    }
-
-    //τρέχει συνέχεια όσο το παιχνίδι είναι ενεργό, ελέγχει την απόσταση και αποφασίζει αν/πότε δονεί
-    async function vibrationLoop() {
-      if (paused) return; //σταματάει εντελώς όσο δείχνουμε popup
-      if (!isTouching) {
-        setTimeout(vibrationLoop, 150); //δεν δονεί, απλά ξανακοιτάει σε λίγο
-        return;
-      }
-      if (currentDistance <= foundThreshold) {
-        await doVibrate(500); //μεγάλη δόνηση = "βρέθηκε"
-        onLevelFound();
-        return;
-      }
-      if (currentDistance <= startThreshold) {
-        await doVibrate(50); // σύντομος παλμός
-        setTimeout(vibrationLoop, getPause(currentDistance));
-      } else {
-        setTimeout(vibrationLoop, 150); //πολύ μακριά ακόμα, καμία δόνηση
-      }
-    }
-
-    //υπολογίζουμε σκορ/χρόνο και δείχνουμε το popup "Βρέθηκε!" με επιλογές Συνέχεια/Τέλος
-    function onLevelFound() {
-      paused = true;
-      stopTimerDisplay();
-      const elapsed = Date.now() - levelStartTime;
-      const score = calcScore(elapsed, level);
-      totalScore += score;
-      showContinueOverlay(elapsed, score);
-    }
-
-    function showContinueOverlay(elapsedMs, score) {
-      const sec = (elapsedMs / 1000).toFixed(1);
-      overlay.innerHTML = `
-        <h2>Ο θησαυρός βρέθηκε!</h2>
-        <p>Χρόνος: ${sec}s</p>
-        <p>Πόντοι επιπέδου: ${score}</p>
-        <p>Συνολικό σκορ: ${totalScore}</p>
-        <div>
-          <button id="continueBtn">Συνέχεια</button>
-          <button id="endBtn">Τέλος</button>
-        </div>
-      `;
-      speak("Βρέθηκε! Χρόνος " + sec + " δευτερόλεπτα. " + score + " πόντοι.");
-      overlay.style.display = "flex";
-      //προσθέτουμε τους listeners ΜΕΤΑ το innerHTML, γιατί τα κουμπιά μόλις δημιουργήθηκαν και δεν υπήρχαν πριν
-      document.getElementById("continueBtn").addEventListener("click", nextLevel);
-      document.getElementById("endBtn").addEventListener("click", showEndScreen);
-    }
-
-    //πάει στο επόμενο level, ή τερματίζει αν ήταν το τελευταίο//
-    function nextLevel() {
-      if (level >= TOTAL_LEVELS) {
-        showEndScreen();
-        return;
-      }
-      level++;
-      startLevel();
-    }
-
-    //Ξεκινάει (ή επανεκκινεί) ένα level: κρύβει το popup, φτιάχνει
-    //νέο στόχο, μηδενίζει μετρητές, ξεκινάει ξανά τον βρόχο δόνησης
-    function startLevel() {
+  // ============================================================
+  // ΟΘΟΝΗ ΕΙΣΑΓΩΓΗΣ ΟΝΟΜΑΤΟΣ
+  // Ζητείται μία φορά πριν το level 1, ώστε η τοπική κατάταξη να
+  // ξεχωρίζει διαφορετικούς παίκτες στην ίδια συσκευή
+  // ============================================================
+  function showNameEntryScreen() {
+    overlay.innerHTML = `
+      <div class="title-card"><h2>✏️ Όνομα παίκτη</h2></div>
+      <input type="text" id="nameInput" placeholder="Γράψε το όνομά σου" maxlength="12" />
+      <br>
+      <button id="confirmNameBtn">▶️ Ξεκίνα το παιχνίδι</button>
+    `;
+    overlay.style.display = "flex";
+    document.getElementById("confirmNameBtn").addEventListener("click", () => {
+      const val = document.getElementById("nameInput").value.trim();
+      playerName = val.length > 0 ? val : "Ανώνυμος";  // αν αφεθεί κενό -> "Ανώνυμος"
       overlay.style.display = "none";
-      const t = getThresholds(level);
-      foundThreshold = t.found;
-      startThreshold = t.start;
-      spawnTarget();
-      spawnObstacles(level);
-      currentDistance = Infinity;
-      isTouching = false;
-      levelStartTime = Date.now();
-      startTimerDisplay();
-      levelEl.textContent = "Level " + level + "/" + TOTAL_LEVELS;
-      speak("Επίπεδο " + level);
-      paused = false;
-      vibrationLoop();
-    }
-
-    //αποθηκεύει το σκορ στο localStorage του κινητού (μένει εκεί ακόμα
-    //κι αν κλείσεις την εφαρμογή) και επιστρέφει τα 5 καλύτερα σκορ
-    function saveScore(score) {
-      let scores = JSON.parse(localStorage.getItem("highscores") || "[]");
-      scores.push({ score: score, date: new Date().toLocaleDateString("el-GR") });
-      scores.sort((a, b) => b.score - a.score); // μεγαλύτερο σκορ πρώτα
-      scores = scores.slice(0, 5); // κρατάμε μόνο τα 5 καλύτερα
-      localStorage.setItem("highscores", JSON.stringify(scores));
-      return scores;
-    }
-
-    //τελική οθόνη: συνολικό σκορ + κατάταξη + κουμπί επανεκκίνησης
-    function showEndScreen() {
-      paused = true;
-      const scores = saveScore(totalScore);
-      const list = scores
-        .map((s, i) => (i + 1) + ". " + s.score + " πόντοι (" + s.date + ")")
-        .join("<br>");
-
-      overlay.innerHTML = `
-        <h2>Τέλος παιχνιδιού!</h2>
-        <p>Συνολικό σκορ: ${totalScore}</p>
-        <p>Επίπεδα: ${level}/${TOTAL_LEVELS}</p>
-        <h3>🏆 Κορυφαία σκορ (στο κινητό σου)</h3>
-        <p>${list}</p>
-        <button id="restartBtn">Παίξε ξανά</button>
-      `;
-      speak("Τέλος παιχνιδιού. Συνολικό σκορ " + totalScore + " πόντοι.");
-      overlay.style.display = "flex";
-      document.getElementById("restartBtn").addEventListener("click", restartGame);
-    }
-
-    function restartGame() {
       level = 1;
       totalScore = 0;
       startLevel();
+    });
+  }
+
+  // ============================================================
+  // ΧΡΟΝΟΜΕΤΡΟ — τρέχει στο παρασκήνιο για τον υπολογισμό του σκορ.
+  // Δεν εμφανίζεται ποτέ οπτικά (το #timer είναι μόνιμα display:none).
+  // ============================================================
+  function startTimerDisplay() {
+    stopTimerDisplay();
+    timerInterval = setInterval(() => {
+      const sec = Math.floor((Date.now() - levelStartTime) / 1000);
+      timerEl.textContent = "Χρόνος: " + sec + "s";
+    }, 500);
+  }
+
+  function stopTimerDisplay() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  // ============================================================
+  // ΕΜΠΟΔΙΑ — αυξάνονται σταδιακά με το level
+  // ============================================================
+  function obstacleCountForLevel(lvl) {
+    return Math.min(6, Math.floor(lvl / 2));  // 0 στα πρώτα levels, έως 6 στα τελευταία
+  }
+
+  function spawnObstacles(lvl) {
+    obstacles = [];
+    obstacleInside = [];
+    const count = obstacleCountForLevel(lvl);
+    const margin = 60;
+    for (let i = 0; i < count; i++) {
+      obstacles.push({
+        x: margin + Math.random() * (window.innerWidth - margin * 2),
+        y: margin + Math.random() * (window.innerHeight - margin * 2)
+      });
+      obstacleInside.push(false);
+    }
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Το εμπόδιο έχει ΔΙΑΚΡΙΤΟ απτικό μοτίβο: διπλός σύντομος παλμός,
+  // ώστε ο χρήστης να το ξεχωρίζει από τη δόνηση προσέγγισης του θησαυρού
+  async function doObstacleVibrate() {
+    await doVibrate(60);
+    await sleep(90);
+    await doVibrate(60);
+  }
+
+  // Δόνηση: πρώτα NATIVE Haptics plugin, μετά fallback στο Web Vibration API.
+  // (Το navigator.vibrate δεν υποστηρίζεται από τον Firefox Android, γι' αυτό
+  //  η εφαρμογή βασίζεται στο native plugin.)
+  async function doVibrate(duration) {
+    try {
+      if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Haptics) {
+        await Capacitor.Plugins.Haptics.vibrate({ duration: duration });
+      } else if (navigator.vibrate) {
+        navigator.vibrate(duration);
+      }
+    } catch (err) {
+      console.log("vibrate error:", err);
+    }
+  }
+
+  // ============================================================
+  // ΑΝΤΙΣΤΟΙΧΙΣΗ ΑΠΟΣΤΑΣΗΣ -> ΡΥΘΜΟΥ ΔΟΝΗΣΗΣ
+  // Βασισμένο στο Kokkonis et al. (WSCE 2019): διάρκεια παλμού <300ms,
+  // παύση <400ms, συνολική περίοδος <600ms για αντιληπτά απτικά μοτίβα.
+  // Όσο πιο κοντά στον θησαυρό, τόσο μικρότερη η παύση -> πυκνότερη δόνηση.
+  // ============================================================
+  function getPause(distance) {
+    if (distance < foundThreshold) return 0;               // ουσιαστικά συνεχής δόνηση -> βρέθηκε
+    if (distance < startThreshold * 0.3) return 100;       // πολύ κοντά
+    if (distance < startThreshold * 0.6) return 250;       // κοντά
+    if (distance < startThreshold) return 400;             // μακριά αλλά εντός εμβέλειας
+    return null;                                           // εκτός εμβέλειας -> καμία δόνηση
+  }
+
+  // Αναδρομικό loop με setTimeout (όχι setInterval), ώστε ο ρυθμός να
+  // προσαρμόζεται δυναμικά στην τρέχουσα απόσταση σε κάθε επανάληψη
+  async function vibrationLoop() {
+    if (paused) return;
+
+    const pause = getPause(currentDistance);
+
+    if (pause === null) {
+      setTimeout(vibrationLoop, 200);
+      return;
     }
 
-    //ενημερώνει τη θέση δαχτύλου και την απόσταση από τον
-    //στόχο, κάθε φορά που το δάχτυλο ακουμπάει ή κινείται
-    function updatePosition(e) {
-      const x = Math.round(e.touches[0].clientX);
-      const y = Math.round(e.touches[0].clientY);
-      const dx = x - targetX;
-      const dy = y - targetY;
-      currentDistance = Math.round(Math.hypot(dx, dy));
-      coordsEl.textContent = "x: " + x + ", y: " + y + ", distance: " + currentDistance;
+    if (currentDistance < foundThreshold) {
+      onLevelFound();
+      return;
+    }
 
-      //έλεγχος αν το δάχτυλο μπήκε ή βγήκε από κάποιο εμπόδιο
-      obstacles.forEach((obs, i) => {
-      const d = Math.hypot(x - obs.x, y - obs.y);
-      if (d <= OBSTACLE_RADIUS) {
-        if (!obstacleInside[i]) {
-          obstacleInside[i] = true; //μόλις μπήκε τώρα
-          doObstacleVibrate();      //δονεί ΜΙΑ φορά κατά την είσοδο
-        }
-      } else {
-        obstacleInside[i] = false; //βγήκε, έτοιμο να ξαναδονήσει αν ξαναμπεί
-      }
+    await doVibrate(120);
+    setTimeout(vibrationLoop, 120 + pause);
+  }
+
+  // ============================================================
+  // ΕΥΡΕΣΗ ΘΗΣΑΥΡΟΥ
+  // ============================================================
+  function onLevelFound() {
+    paused = true;
+    stopTimerDisplay();
+    const elapsedMs = Date.now() - levelStartTime;
+    const score = calcScore(elapsedMs, level);
+    totalScore += score;
+    showContinueOverlay(elapsedMs, score);
+  }
+
+  function showContinueOverlay(elapsedMs, score) {
+    const sec = Math.floor(elapsedMs / 1000);
+    speak("Βρέθηκε! Χρόνος " + sec + " δευτερόλεπτα, βαθμολογία " + score);
+    overlay.innerHTML = `
+      <div class="title-card"><h2>🎉 Βρέθηκε!</h2></div>
+      <p>Χρόνος: ${sec}s</p>
+      <p>Πόντοι level: ${score}</p>
+      <p>Σύνολο: ${totalScore}</p>
+      <button id="nextBtn">➡️ Επόμενο level</button>
+    `;
+    overlay.style.display = "flex";
+    document.getElementById("nextBtn").addEventListener("click", nextLevel);
+  }
+
+  function nextLevel() {
+    level++;
+    if (level > TOTAL_LEVELS) {
+      saveScore(totalScore);   // αποθήκευση μόνο στο τέλος όλων των levels
+      showEndScreen();
+    } else {
+      startLevel();
+    }
+  }
+
+  // ============================================================
+  // ΕΚΚΙΝΗΣΗ LEVEL
+  // ============================================================
+  function startLevel() {
+    overlay.style.display = "none";
+    const t = getThresholds(level);
+    foundThreshold = t.found;
+    startThreshold = t.start;
+    spawnTarget();
+    spawnObstacles(level);
+    currentDistance = Infinity;
+    isTouching = false;
+    levelStartTime = Date.now();
+    startTimerDisplay();
+    levelEl.textContent = "Level " + level + "/" + TOTAL_LEVELS;
+    speak("Επίπεδο " + level);   // φωνητική ανακοίνωση, αφού η οθόνη είναι μαύρη
+    paused = false;
+    vibrationLoop();
+  }
+
+  // ============================================================
+  // ΤΟΠΙΚΗ ΑΠΟΘΗΚΕΥΣΗ ΣΚΟΡ (localStorage)
+  // Τα δεδομένα παραμένουν ακόμα και μετά το κλείσιμο της εφαρμογής.
+  // Κρατάμε τα 5 καλύτερα σκορ, με όνομα παίκτη και ημερομηνία.
+  // ============================================================
+  function saveScore(score) {
+    const scores = JSON.parse(localStorage.getItem("highscores") || "[]");
+    scores.push({
+      name: playerName,
+      score: score,
+      date: new Date().toLocaleDateString("el-GR")
+    });
+    scores.sort((a, b) => b.score - a.score);   // φθίνουσα ταξινόμηση
+    const top5 = scores.slice(0, 5);
+    localStorage.setItem("highscores", JSON.stringify(top5));
+  }
+
+  function showEndScreen() {
+    speak("Τέλος παιχνιδιού. Συνολική βαθμολογία " + totalScore);
+    overlay.innerHTML = `
+      <div class="title-card"><h2>🏁 Τέλος παιχνιδιού!</h2></div>
+      <p>Παίκτης: ${playerName}</p>
+      <p>Συνολικό σκορ: ${totalScore}</p>
+      <button id="endBtn">🔁 Ξανά</button>
+      <button id="menuBtn" class="secondary">🏠 Μενού</button>
+    `;
+    overlay.style.display = "flex";
+    document.getElementById("endBtn").addEventListener("click", restartGame);
+    document.getElementById("menuBtn").addEventListener("click", showMainMenu);
+  }
+
+  function restartGame() {
+    showCalibrationScreen();   // νέο παιχνίδι -> ξανά έλεγχος δόνησης και όνομα
+  }
+
+  // ============================================================
+  // ΚΑΤΑΤΑΞΗ
+  // Διαβάζει το localStorage και εμφανίζει τα Top 5 με χρωματικό κώδικα:
+  // 1η θέση χρυσό, 2η ασημί, 3η μπρούτζινο, υπόλοιπες λευκό.
+  // Προσβάσιμη ανά πάσα στιγμή από το κύριο μενού.
+  // ============================================================
+  function showLeaderboardScreen() {
+    const scores = JSON.parse(localStorage.getItem("highscores") || "[]");
+    let rowsHtml = "";
+
+    if (scores.length === 0) {
+      rowsHtml = "<p>Δεν υπάρχουν ακόμα σκορ.</p>";
+    } else {
+      scores.forEach((s, i) => {
+        let rankClass = "rank-white";
+        if (i === 0) rankClass = "rank-gold";
+        else if (i === 1) rankClass = "rank-silver";
+        else if (i === 2) rankClass = "rank-bronze";
+
+        rowsHtml += `
+          <div class="leaderboard-row ${rankClass}">
+            <span class="rank-number">${i + 1}</span>
+            <span class="player-name">${s.name}</span>
+            <span class="player-score">${s.score}</span>
+          </div>`;
       });
     }
 
-    document.getElementById("game").addEventListener("touchstart", (e) => {
-      isTouching = true;
-      updatePosition(e);
-    });
-    document.getElementById("game").addEventListener("touchmove", updatePosition);
-    document.getElementById("game").addEventListener("touchend", () => {
-      isTouching = false;
-    });
+    overlay.innerHTML = `
+      <div class="title-card"><h2>🏆 Κατάταξη</h2></div>
+      <div class="leaderboard-list">${rowsHtml}</div>
+      <button id="backBtn" class="secondary">◀️ Πίσω</button>
+    `;
+    overlay.style.display = "flex";
+    document.getElementById("backBtn").addEventListener("click", showMainMenu);
+  }
 
-    //εκκίνηση παιχνιδιού όταν φορτώνει η σελίδα
-    showCalibrationScreen();
+  // ============================================================
+  // ΕΞΟΔΟΣ — κλείνει πραγματικά την εφαρμογή μέσω του native
+  // @capacitor/app plugin. Σε δοκιμή από browser δεν κάνει τίποτα.
+  // ============================================================
+  async function exitApp() {
+    try {
+      if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) {
+        await Capacitor.Plugins.App.exitApp();
+      } else {
+        console.log("Η έξοδος δεν υποστηρίζεται σε browser δοκιμή.");
+      }
+    } catch (err) {
+      console.log("exit error:", err);
+    }
+  }
+
+  // ============================================================
+  // ΠΑΡΑΚΟΛΟΥΘΗΣΗ ΘΕΣΗΣ ΔΑΧΤΥΛΟΥ
+  // Υπολογίζει την ευκλείδεια απόσταση από τον θησαυρό και ελέγχει
+  // αν το δάχτυλο μπήκε σε κάποιο εμπόδιο.
+  // ============================================================
+  function updatePosition(e) {
+    if (paused || !isTouching) return;
+    const touch = e.touches[0];
+    const x = touch.clientX;
+    const y = touch.clientY;
+
+    currentDistance = Math.hypot(x - targetX, y - targetY);
+    coordsEl.textContent = "distance:" + Math.round(currentDistance);
+
+    // Έλεγχος εμποδίων: η δόνηση εμποδίου παίζει μία φορά ανά είσοδο
+    // στην περιοχή του, όχι συνεχόμενα όσο το δάχτυλο μένει μέσα
+    obstacles.forEach((obs, idx) => {
+      const d = Math.hypot(x - obs.x, y - obs.y);
+      const inside = d < OBSTACLE_RADIUS;
+      if (inside && !obstacleInside[idx]) {
+        doObstacleVibrate();
+      }
+      obstacleInside[idx] = inside;
+    });
+  }
+
+  document.getElementById("game").addEventListener("touchstart", (e) => {
+    isTouching = true;
+    updatePosition(e);
+  });
+
+  document.getElementById("game").addEventListener("touchmove", (e) => {
+    updatePosition(e);
+  });
+
+  document.getElementById("game").addEventListener("touchend", () => {
+    isTouching = false;
+    currentDistance = Infinity;   // χωρίς επαφή -> σταματά η δόνηση προσέγγισης
+  });
+
+  // ============================================================
+  // ΕΚΚΙΝΗΣΗ ΕΦΑΡΜΟΓΗΣ
+  // ============================================================
+  showMainMenu();
+
   </script>
 
 </body>
