@@ -315,7 +315,7 @@
 
   function showContinueOverlay(elapsedMs, score) {
     const sec = Math.floor(elapsedMs / 1000);
-    speak("Βρέθηκε! Χρόνος " + sec + " δευτερόλεπτα, βαθμολογία " + score);
+    speak("Ο θησαυρός βρέθηκε! Χρόνος " + sec + " δευτερόλεπτα, βαθμολογία " + score);
 
     // Το κουμπί δείχνει σε ποιο level πάει ο παίκτης. Στο τελευταίο level
     // αλλάζει κείμενο, αφού δεν υπάρχει επόμενο αλλά τελικό αποτέλεσμα.
@@ -324,7 +324,7 @@
       : "🏁 Τελικό αποτέλεσμα";
 
     overlay.innerHTML = `
-      <div class="title-card"><h2>🎉 Βρέθηκε!</h2></div>
+      <div class="title-card"><h2>🎉 Ο θησαυρός βρέθηκε!</h2></div>
       <p>Χρόνος: ${sec}s</p>
       <p>Πόντοι level: ${score}</p>
       <p>Σύνολο: ${totalScore}</p>
